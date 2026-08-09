@@ -1,29 +1,36 @@
 package main
 
 import (
-	"net"
+	"os"
+	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 
-	"github.com/weebon/distributed-rate-limiter/internal/limiter"
+	"github.com/weebon/distributed-rate-limiter/internal/store"
 )
 
 func main() {
 	backendURL, _ := url.Parse("http://localhost:9090")
 	proxy := httputil.NewSingleHostReverseProxy(backendURL)
 
-	rl := limiter.NewManager(5, 1)
+	rl := store.NewRedisLimiter("localhost:6379", 5, 1)
+	ctx := context.Background()
 
-		handler := func(w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
-			host = r.RemoteAddr // fallback if no port present
+			host = r.RemoteAddr
 		}
-		key := host
 
-		if !rl.Allow(key) {
+		allowed, err := rl.Allow(ctx, host)
+		if err != nil {
+			http.Error(w, "Internal error checking rate limit", http.StatusInternalServerError)
+			return
+		}
+		if !allowed {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
@@ -32,6 +39,11 @@ func main() {
 	}
 
 	http.HandleFunc("/", handler)
-	fmt.Println("Gateway running on :8080")
-	http.ListenAndServe(":8080", nil)
+	 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	fmt.Println("Gateway running on :" + port)
+	http.ListenAndServe(":"+port, nil)
 }
