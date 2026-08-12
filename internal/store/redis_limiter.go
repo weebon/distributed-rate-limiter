@@ -8,20 +8,14 @@ import (
 )
 
 type RedisLimiter struct {
-	client     *redis.Client
-	capacity   float64
-	refillRate float64
+	client *redis.Client
 }
 
-func NewRedisLimiter(addr string, capacity, refillRate float64) *RedisLimiter {
+func NewRedisLimiter(addr string) *RedisLimiter {
 	client := redis.NewClient(&redis.Options{
 		Addr: addr,
 	})
-	return &RedisLimiter{
-		client:     client,
-		capacity:   capacity,
-		refillRate: refillRate,
-	}
+	return &RedisLimiter{client: client}
 }
 
 const tokenBucketScript = `
@@ -54,12 +48,13 @@ redis.call("EXPIRE", key, 3600)
 return allowed
 `
 
-func (rl *RedisLimiter) Allow(ctx context.Context, key string) (bool, error) {
+// Allow checks whether a request for key is allowed, given a specific capacity and refill rate.
+func (rl *RedisLimiter) Allow(ctx context.Context, key string, capacity, refillRate float64) (bool, error) {
 	now := float64(time.Now().UnixNano()) / 1e9
 
 	result, err := rl.client.Eval(ctx, tokenBucketScript,
 		[]string{"ratelimit:" + key},
-		rl.capacity, rl.refillRate, now,
+		capacity, refillRate, now,
 	).Result()
 	if err != nil {
 		return false, err

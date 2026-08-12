@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/weebon/distributed-rate-limiter/internal/config"
 	"github.com/weebon/distributed-rate-limiter/internal/store"
 )
 
@@ -16,17 +17,11 @@ func main() {
 	backendURL, _ := url.Parse("http://localhost:9090")
 	proxy := httputil.NewSingleHostReverseProxy(backendURL)
 
-	var rl store.Limiter
-	algo := os.Getenv("ALGO")
-	switch algo {
-	case "sliding_window":
-		rl = store.NewRedisSlidingWindow("localhost:6379", 5, 10)  
-		fmt.Println("Using sliding window algorithm")
-	default:
-		rl = store.NewRedisLimiter("localhost:6379", 5, 1)  
-		fmt.Println("Using token bucket algorithm")
-	}
+	cfg := config.NewDefaultConfig()
+	tokenLimiter := store.NewRedisLimiter("localhost:6379")
+	slidingLimiter := store.NewRedisSlidingWindow("localhost:6379")
 
+	algo := os.Getenv("ALGO")
 	ctx := context.Background()
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
@@ -35,8 +30,19 @@ func main() {
 			host = r.RemoteAddr
 		}
 
-		allowed, err := rl.Allow(ctx, host)
-		if err != nil {
+		routeLimit := cfg.ForRoute(r.URL.Path)
+		key := host + ":" + r.URL.Path // per-client AND per-route
+
+		var allowed bool
+		var checkErr error
+
+		if algo == "sliding_window" {
+			allowed, checkErr = slidingLimiter.Allow(ctx, key, routeLimit.Limit, routeLimit.WindowSecs)
+		} else {
+			allowed, checkErr = tokenLimiter.Allow(ctx, key, routeLimit.Capacity, routeLimit.RefillRate)
+		}
+
+		if checkErr != nil {
 			http.Error(w, "Internal error checking rate limit", http.StatusInternalServerError)
 			return
 		}

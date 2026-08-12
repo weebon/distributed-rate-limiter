@@ -7,25 +7,17 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
- 
 type RedisSlidingWindow struct {
-	client     *redis.Client
-	limit      int64
-	windowSecs float64
+	client *redis.Client
 }
 
-func NewRedisSlidingWindow(addr string, limit int64, windowSecs float64) *RedisSlidingWindow {
+func NewRedisSlidingWindow(addr string) *RedisSlidingWindow {
 	client := redis.NewClient(&redis.Options{
 		Addr: addr,
 	})
-	return &RedisSlidingWindow{
-		client:     client,
-		limit:      limit,
-		windowSecs: windowSecs,
-	}
+	return &RedisSlidingWindow{client: client}
 }
 
- 
 const slidingWindowScript = `
 local key = KEYS[1]
 local limit = tonumber(ARGV[1])
@@ -50,12 +42,12 @@ return allowed
 `
 
  
-func (sw *RedisSlidingWindow) Allow(ctx context.Context, key string) (bool, error) {
+func (sw *RedisSlidingWindow) Allow(ctx context.Context, key string, limit int64, windowSecs float64) (bool, error) {
 	now := float64(time.Now().UnixNano()) / 1e9
 
 	result, err := sw.client.Eval(ctx, slidingWindowScript,
 		[]string{"sliding:" + key},
-		sw.limit, sw.windowSecs, now,
+		limit, windowSecs, now,
 	).Result()
 	if err != nil {
 		return false, err
