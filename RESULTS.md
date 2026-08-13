@@ -15,9 +15,9 @@ Matches theoretical expectation: ~20 capacity + ~25 refilled over 5 sec ≈ 45 a
 Two gateway instances (`:8080` and `:8081`) load tested **simultaneously** (backgrounded, same start time), both hitting the same Redis-backed rate limiter for `/api/search`.
 
 Command:
-hey -z 5s -c 10 http://localhost:8080/api/search > /tmp/gw1.txt &
+`hey -z 5s -c 10 http://localhost:8080/api/search > /tmp/gw1.txt &
 hey -z 5s -c 10 http://localhost:8081/api/search > /tmp/gw2.txt &
-wait
+wait`
 Results:
 | Instance | Total requests | Allowed (200) | Rejected (429) |
 |----------|----------------|----------------|------------------|
