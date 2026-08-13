@@ -14,12 +14,20 @@ import (
 )
 
 func main() {
-	backendURL, _ := url.Parse("http://localhost:9090")
+	backendAddr := os.Getenv("BACKEND_ADDR")
+   if backendAddr == "" {
+	backendAddr = "http://localhost:9090"
+	}
+   backendURL, _ := url.Parse(backendAddr)
 	proxy := httputil.NewSingleHostReverseProxy(backendURL)
 
 	cfg := config.NewDefaultConfig()
-	tokenLimiter := store.NewRedisLimiter("localhost:6379")
-	slidingLimiter := store.NewRedisSlidingWindow("localhost:6379")
+ redisAddr := os.Getenv("REDIS_ADDR")
+if redisAddr == "" {
+	redisAddr = "localhost:6379"
+}
+tokenLimiter := store.NewRedisLimiter(redisAddr)
+slidingLimiter := store.NewRedisSlidingWindow(redisAddr)
 
 	algo := os.Getenv("ALGO")
 	ctx := context.Background()

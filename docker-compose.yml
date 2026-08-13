@@ -1,0 +1,38 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    ports:
+      - "9090:9090"
+
+  gateway1:
+    build:
+      context: .
+      dockerfile: deploy/gateway.Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_ADDR=redis:6379
+      - BACKEND_ADDR=http://backend:9090
+    depends_on:
+      - redis
+      - backend
+
+  gateway2:
+    build:
+      context: .
+      dockerfile: deploy/gateway.Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      - REDIS_ADDR=redis:6379
+      - BACKEND_ADDR=http://backend:9090
+    depends_on:
+      - redis
+      - backend
