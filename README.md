@@ -9,6 +9,7 @@ A distributed API rate limiter and reverse proxy gateway, built in Go, using Red
 - Two selectable algorithms: **token bucket** and **sliding window log**
 - Limit state lives in Redis, shared atomically (via Lua scripting) across any number of gateway instances — not per-process, genuinely distributed
 - Per-route configuration: different endpoints can have different limits
+- Fully containerized with Docker Compose — one command spins up Redis, backend, and two gateway instances, verified to share one rate limit correctly
 
 ## Why this project
 
@@ -41,23 +42,34 @@ Both are implemented as atomic Redis Lua scripts, so concurrent requests across 
 
 - Go (stdlib `net/http`, `net/http/httputil` for the reverse proxy)
 - Redis (shared state + Lua scripting for atomicity)
+- Docker & Docker Compose
 - Tested with Go's built-in `-race` detector and load tested with [`hey`](https://github.com/rakyll/hey)
 
-## Prerequisites
+## Running with Docker (recommended)
 
-- **Go** 1.21+ — [install instructions](https://go.dev/doc/install)
-- **Redis** — on Debian/Ubuntu (including WSL): `sudo apt install redis-server`, then start it with `sudo service redis-server start`
-- **(Optional) `hey`** for load testing — `sudo apt install hey`, or `go install github.com/rakyll/hey@latest`
+Requires Docker and Docker Compose.
 
-## Running locally
+```bash
+docker compose up --build
+```
 
-**1. Start Redis** (if not already running):
+This spins up Redis, the backend, and two gateway instances (`:8080` and `:8081`) — verified to share one rate limit correctly across both. Test with:
+```bash
+curl http://localhost:8080/api/test
+curl http://localhost:8081/api/test
+```
+
+## Running locally (without Docker)
+
+Requires Go 1.21+ and a running Redis instance (`redis-server`).
+
+**1. Start Redis:**
 ```bash
 sudo service redis-server start
 redis-cli ping   # should reply PONG
 ```
 
-**2. Start the backend (dummy service being protected):**
+**2. Start the backend:**
 ```bash
 cd cmd/backend
 go run main.go
@@ -96,8 +108,8 @@ go test -race ./...
 
 ## Results
 
-See [RESULTS.md](./RESULTS.md) for load test data proving distributed correctness — combined allowed requests across two concurrent gateway instances matched the single-instance baseline rather than doubling, confirming the shared limit holds under real concurrent load.
+See [RESULTS.md](./RESULTS.md) for load test data proving distributed correctness — combined allowed requests across two concurrent gateway instances matched the single-instance baseline rather than doubling, confirming the shared limit holds under real concurrent load, both bare-metal and containerized.
 
 ## Status
 
-Core functionality complete: distributed rate limiting, two algorithms, per-route config, verified under load. Optional next steps: live metrics dashboard, dynamic config reload, cluster membership for gateway auto-discovery.
+Core functionality complete: distributed rate limiting, two algorithms, per-route config, Docker Compose setup, verified under load.
